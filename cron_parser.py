@@ -1,50 +1,78 @@
-#!/usr/bin/env python3  # Use Python 3 interpreter to run this script
-import sys  # Import sys module to access command-line arguments
+#!/usr/bin/env python3
+import sys
 
-# Define valid ranges for each cron field
-RANGES = {
+# Cron field limits
+CRON_LIMITS = {
     "minute": (0, 59),
     "hour": (0, 23),
-    "day": (1, 31),
+    "day of month": (1, 31),
     "month": (1, 12),
-    "weekday": (0, 6),
+    "day of week": (0, 6),
 }
 
-# Function to expand a cron field expression into a list of values
-def expand(expr, field):
-    start, end = RANGES[field]  # Get valid range for the field
-    if expr == "*":  # '*' means all possible values in the range
+def expand_cron_field(field_expr, field_name):
+    """Turn a cron field into a list of valid numbers."""
+    start, end = CRON_LIMITS[field_name]
+
+    if field_expr == "*":
         return list(range(start, end + 1))
-    
-    vals = set()  # Use a set to avoid duplicate values
-    for part in expr.split(","):  # Split expression by comma for multiple values
-        if part.startswith("*/"):  # Handle step values like '*/15'
+
+    result = set()
+    for part in field_expr.split(","):
+        if part.startswith("*/"):  # step like */15
             step = int(part[2:])
-            vals.update(range(start, end + 1, step))  # Add values with step
-        elif "-" in part:  # Handle ranges like '5-10'
-            s, e = map(int, part.split("-"))
-            vals.update(range(s, e + 1))  # Add all numbers in range
-        else:  # Single numeric value
-            vals.add(int(part))
-    return sorted(vals)  # Return sorted list of values
+            result.update(range(start, end + 1, step))
+        elif "-" in part:  # range (with or without step)
+            if "/" in part:
+                rng, step = part.split("/")
+                step = int(step)
+                r_start, r_end = map(int, rng.split("-"))
+                result.update(range(r_start, r_end + 1, step))
+            else:
+                r_start, r_end = map(int, part.split("-"))
+                result.update(range(r_start, r_end + 1))
+        else:  # single value
+            result.add(int(part))
 
-# Function to parse a full cron expression
-def parse(expr):
-    m, h, d, mo, w, cmd = expr.split(maxsplit=5)  # Split into 6 parts (minute, hour, day, month, weekday, command)
-    # Expand each field using the expand function
-    data = {f: expand(v, f) for f, v in zip(["minute","hour","day","month","weekday"], [m,h,d,mo,w])}
-    data["command"] = cmd  # Store the command separately
-    return data  # Return parsed data as dictionary
+    # ✅ Validate numbers are within allowed limits
+    for val in result:
+        if val < start or val > end:
+            raise ValueError(
+                f"Invalid value {val} for '{field_name}'. Allowed range: {start}-{end}"
+            )
 
-# Function to display parsed cron fields in readable format
-def show(data):
-    for k in ["minute","hour","day","month","weekday"]:  # Iterate through fields
-        print(f"{k:<8}{' '.join(map(str, data[k]))}")  # Print field name and its values
-    print(f"command {data['command']}")  # Print the command
+    return sorted(result)
 
-# Main entry point
-if __name__ == "__main__":
-    if len(sys.argv) != 2:  # Ensure exactly one argument is provided
-        print('Usage: cron_parser.py "<cron expression>"')  # Print usage message
-        sys.exit(1)  # Exit with error code 1
-    show(parse(sys.argv[1]))  # Parse and display the cron expression
+def parse_cron_expr(cron_expr):
+    """Split and expand cron expression into fields."""
+    parts = cron_expr.strip().split(maxsplit=5)
+    if len(parts) < 6:
+        raise ValueError("Cron expression must have 6 parts")
+
+    minute, hour, dom, month, dow, command = parts
+    return {
+        "minute": expand_cron_field(minute, "minute"),
+        "hour": expand_cron_field(hour, "hour"),
+        "day of month": expand_cron_field(dom, "day of month"),
+        "month": expand_cron_field(month, "month"),
+        "day of week": expand_cron_field(dow, "day of week"),
+        "command": command,
+    }
+
+def show_schedule(expanded):
+    """Print results in a nice table."""
+    for field in ["minute", "hour", "day of month", "month", "day of week"]:
+        print(f"{field:<14}{' '.join(map(str, expanded[field]))}")
+    print(f"{'command':<14}{expanded['command']}")
+
+if __name__== "_main_":
+    if len(sys.argv) != 2:
+        print("Usage: python cron_parser.py \"<cron expression>\"")
+        sys.exit(1)
+
+    try:
+        expanded = parse_cron_expr(sys.argv[1])
+        show_schedule(expanded)
+    except ValueError as e:
+        print(f"Error: {e}")
+sys.exit(1)
