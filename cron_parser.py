@@ -65,7 +65,7 @@ def show_schedule(expanded):
         print(f"{field:<14}{' '.join(map(str, expanded[field]))}")
     print(f"{'command':<14}{expanded['command']}")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python cron_parser.py \"<cron expression>\"")
         sys.exit(1)
@@ -75,4 +75,4 @@ if _name_ == "_main_":
         show_schedule(expanded)
     except ValueError as e:
         print(f"Error: {e}")
-        sys.exit(1)
+        sys.exit(1)
